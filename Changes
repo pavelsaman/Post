@@ -1,0 +1,74 @@
+Revision history of post app
+
+0.011  2020-05-01 23:15:00  CZE/Prague
+
+    - Config::Reader and Remote::Remote use Class::Std
+    - subdivided t/ folder
+
+0.010  2020-05-01 15:45:00  CZE/Prague
+
+    - Config::Reader: cofigurable values are now separated in this
+      module
+
+0.009  2020-05-01 15:00:00  CZE/Prague
+
+    - version 0.007 of Daytime::Day: _defined subroutine
+    - MANIFEST.SKIP
+    - updated Makefile.PL
+
+0.008  2020-04-29 20:00:00  CZE/Prague
+
+    - Day value is now case-insensitive, so
+      "Tomorrow", "tomorrow", and "TOmoRROW" are the same
+
+0.007  2020-04-28 22:40:00  CZE/Prague
+
+    - added Yesterday, Today, Tomorrow aliases that could
+      be used with Day key
+
+0.006  2020-04-26 19:10:00  CZE/Prague
+
+    - XML::Parse can now accept different encoding, utf-8 is only
+      a default
+    - tiny change to --version message
+    - moved requesting XML branch resource into Post module, it's not
+      in bin/post app anymore
+
+0.005  2020-04-26 15:35:00  CZE/Prague
+
+    - better project structure
+    - decoupled XML parsing into a separate module XML::Parse => no more
+      parsing in both Post and Branch
+    - using only XML::Twig for parsing
+    - tests for XML::Parse module
+    - updated tests for Branch::Branch module
+    - interface has not changes, only the way of parsing XML branches
+
+0.004  2020-04-25 19:00:00  CZE/Prague
+
+    - added options --save and -db
+    - possible to save all branches into a SQLite DB
+    - new module DB::Storage
+    - updated XML::Date, new subroutine get_day_number()
+    - tests for DB::Storage module
+    - added database file in db/post.sqlite
+
+0.003  2020-04-22 20:15:00  CZE/Prague
+
+    - added -hdb|--hasdaybreakon option
+    - test for -hdb|--hasdaybreakon
+    - got rid of any{} in find_by(), that was not a list context
+    - one typo fixed
+    - updated documentation
+
+0.002  2020-04-21 21:00:00  CZE/Prague
+
+    - renamed script/ to bin/, post.pl to only post
+    - added ABSTRACT into Makefile.PL
+    - updated documentation
+    - added EXE_FILES array ref into Makefile.PL
+    - deleted TEST_REQUIRES from Makefile.PL
+
+0.001  2020-04-21 17:00:00  CZE/Prague
+
+    - version 0.001 of the app, first stable version

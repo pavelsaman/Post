@@ -1,0 +1,150 @@
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+post - query Czech Post branch information from official XML feed
+
+=head1 VERSION
+
+This document describes version 0.011
+
+=head1 SYNOPSIS
+
+    Usage: post [-n <name>] [-nl <namelike>] [-a <address>] [-al <addresslike>]
+                [-z <zip_code>] [-c <city] [-cl <citylike>] [-cp <citypart>]
+                [-cpl <citypartlike>] [-t <type>] [-g <geo>] [-ot <openat>]
+                [-ct <closedat>] [-od <openduring>] [-cd <closedduring>] 
+                [-hdb <day>] [--all] [--store] [-db <db_file>]
+
+    Options:
+        -n|--name <name>                   Name of a branch
+        -nl|--namelike <namelike>          Name of a branch,
+                                            performs =~ when searching
+        -a|--address <address>             Address of a branch
+        -al|--addresslike <addresslike>    Address of a branch,
+                                            performs =~ when searching
+        -z|--zip <zipcode>                 Zip code of a branch
+        -c|--city <city>                   City of a branch
+        -cl|--citylike <citylike>          City of a branch,
+                                            performs =~ when searching 
+        -cp|--citypart <citypart>          City part (district) of a branch
+        -cpl|--citypartlike <citypartlike> City part (distict) of a branch,
+                                            performs =~ when searching 
+        -t|--type <type>                   Type of a branch (posta, depo, "" 
+                                            which equals an unknown type)
+        -g|--geo <geo>                     Geo info of a branch in the following
+                                            format: lat=1044557.63 lon=735997.36
+        -ot|--openat <openat>              Day and Time of a branch,
+                                            in the following format:
+                                           Day=Saturday Time:10:00
+        -ct|--closedat <closedat>          Day and Time of a branch,
+                                            in the following format:
+                                           Day=Saturday Time:10:00
+        -od|--openduring <openduring>      Day and Time of a branch,
+                                            in the following format:
+                                            Day=Saturday StartTime:10:00
+                                            EndTime=18:00
+        -cd|--closedduring <closedduring>  Day and Time of a branch,
+                                            in the following format:
+                                            Day=Saturday StartTime:10:00
+                                            EndTime=20:00
+        -hdb|--hasdaybreakon <day>         Day of a branch in the following format:
+                                            Day=Monday 
+        --all                              Returns all branches.  
+        --store                            Updates local SQLite DB of branches and
+                                            their opening hours 
+        -db|--dbfile <db_file>             Path to a SQLite DB file. 
+
+        --version                          Prints version info  
+        --usage                            Prints the usage summary of this help
+        --help                             Prints this help message       
+        --man                              Prints the complete manpage
+                                            [not-yet-implemented]
+
+=head1 DESCRIPTION
+
+The B<post> application retrieves information from official Czech Post XML feed
+L<http://napostu.ceskaposta.cz/vystupy/balikovny.xml> and presents them in
+loosely structures text output.
+
+Post app provides a bunch of command-line options for searching desired
+branches. They could be combined in any way, but there's always a logical
+AND between different commands (e.g. --name and --type) and a logical
+OR between same commands (e.g. --name and --name).
+So in order to search for all branches in Prague and Brno cities,
+you can issue the following command: $ post --name Praha --name Brno
+If you, however, want to search for only branches in Prague and Brno that
+are of type "posta", you would do that with the following command:
+$ post --name Praha --name Brno --type posta
+
+For more information about the command-line options, run the app with --usage
+or --help options.
+
+=head1 EXAMPLES
+
+To see branches only in Prague that are open on Saturday between 10:00 and
+12:00:
+
+    $ post --city Praha --openduring Day=Saturday StartTime=10:00 EndTime=12:00
+
+To see branches closed on Sunday at 1p.m.:
+
+    $ post -ct Day=Sunday Time=13:00
+
+To see branches closed tomorrow at 1p.m.:
+
+    $ post -ct Day=Tomorrow Time=13:00
+
+You can use one of the following 3 aliases: Yesterday, Today, Tomorow.
+
+To see all depo branches in Ostrava:
+
+    $ post -t depo -c Ostrava
+
+=head1 BUGS AND LIMITATIONS
+
+No bugs have been reported.
+
+Please report any bugs or feature requests to C<pavelsam@centrum.cz>.
+
+=head1 REPOSITORY
+
+L<https://github.com/pavelsaman/PerlApps>
+
+=head1 AUTHOR
+
+Pavel Saman C<pavelsam@centrum.cz>
+
+=head1 LICENCE AND COPYRIGHT
+
+Copyright © 2020, Pavel Saman C<pavelsam@centrum.cz>. All rights reserved.
+
+This module is free software; you can redistribute it and/or
+modify it under the same terms as Perl itself.
+
+=head1 DISCLAIMER OF WARRANTY
+
+BECAUSE THIS SOFTWARE IS LICENSED FREE OF CHARGE, THERE IS NO WARRANTY
+FOR THE SOFTWARE, TO THE EXTENT PERMITTED BY APPLICABLE LAW. EXCEPT WHEN
+OTHERWISE STATED IN WRITING THE COPYRIGHT HOLDERS AND/OR OTHER PARTIES
+PROVIDE THE SOFTWARE "AS IS" WITHOUT WARRANTY OF ANY KIND, EITHER
+EXPRESSED OR IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. THE
+ENTIRE RISK AS TO THE QUALITY AND PERFORMANCE OF THE SOFTWARE IS WITH
+YOU. SHOULD THE SOFTWARE PROVE DEFECTIVE, YOU ASSUME THE COST OF ALL
+NECESSARY SERVICING, REPAIR, OR CORRECTION.
+
+IN NO EVENT UNLESS REQUIRED BY APPLICABLE LAW OR AGREED TO IN WRITING
+WILL ANY COPYRIGHT HOLDER, OR ANY OTHER PARTY WHO MAY MODIFY AND/OR
+REDISTRIBUTE THE SOFTWARE AS PERMITTED BY THE ABOVE LICENCE, BE
+LIABLE TO YOU FOR DAMAGES, INCLUDING ANY GENERAL, SPECIAL, INCIDENTAL,
+OR CONSEQUENTIAL DAMAGES ARISING OUT OF THE USE OR INABILITY TO USE
+THE SOFTWARE (INCLUDING BUT NOT LIMITED TO LOSS OF DATA OR DATA BEING
+RENDERED INACCURATE OR LOSSES SUSTAINED BY YOU OR THIRD PARTIES OR A
+FAILURE OF THE SOFTWARE TO OPERATE WITH ANY OTHER SOFTWARE), EVEN IF
+SUCH HOLDER OR OTHER PARTY HAS BEEN ADVISED OF THE POSSIBILITY OF
+SUCH DAMAGES.
+
+=cut

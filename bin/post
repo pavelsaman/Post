@@ -1,0 +1,453 @@
+#!/usr/bin/env perl
+
+use strict;
+use warnings;
+
+use Readonly;
+use Pod::Usage;
+use Getopt::Long;
+
+use Post;
+use DB::Storage 0.001 qw(save_branches);
+
+sub print_usage {
+    my $usage_line = <<'END_USAGE';
+Usage: post [-n <name>] [-nl <namelike>] [-a <address>] [-al <addresslike>]
+            [-z <zip_code>] [-c <city] [-cl <citylike>] [-cp <citypart>]
+            [-cpl <citypartlike>] [-t <type>] [-g <geo>] [-ot <openat>]
+            [-ct <closedat>] [-od <openduring>] [-cd <closedduring>] 
+            [-hdb <day>] [--all] [--store] [-db <db_file>]
+END_USAGE
+
+    printf "%s", $usage_line;
+}
+
+sub print_help {
+    my $help_message_start = <<'END_HELP_MSG_START';
+Post - query Czech Post branch information from official XML feed
+END_HELP_MSG_START
+    my $help_message_end = <<'END_HELP_MSG_END';
+Options:
+    -n|--name <name>                   Name of a branch
+    -nl|--namelike <namelike>          Name of a branch,
+                                        performs =~ when searching
+    -a|--address <address>             Address of a branch
+    -al|--addresslike <addresslike>    Address of a branch,
+                                        performs =~ when searching
+    -z|--zip <zipcode>                 Zip code of a branch
+    -c|--city <city>                   City of a branch
+    -cl|--citylike <citylike>          City of a branch,
+                                        performs =~ when searching 
+    -cp|--citypart <citypart>          City part (district) of a branch
+    -cpl|--citypartlike <citypartlike> City part (distict) of a branch,
+                                        performs =~ when searching 
+    -t|--type <type>                   Type of a branch (posta, depo, "" 
+                                        which equals an unknown type)
+    -g|--geo <geo>                     Geo info of a branch in the following
+                                        format: lat=1044557.63 lon=735997.36
+    -ot|--openat <openat>              Day and Time of a branch,
+                                        in the following format:
+                                       Day=Saturday Time:10:00
+    -ct|--closedat <closedat>          Day and Time of a branch,
+                                        in the following format:
+                                       Day=Saturday Time:10:00
+    -od|--openduring <openduring>      Day and Time of a branch,
+                                        in the following format:
+                                        Day=Saturday StartTime:10:00
+                                        EndTime=18:00
+    -cd|--closedduring <closedduring>  Day and Time of a branch,
+                                        in the following format:
+                                        Day=Saturday StartTime:10:00
+                                        EndTime=20:00
+    -hdb|--hasdaybreakon <day>         Day of a branch in the following format:
+                                        Day=Monday 
+    --all                              Returns all branches.   
+    --store                            Updates local SQLite DB of branches and
+                                        their opening hours 
+    -db|--dbfile <db_file>             Absolute path to a SQLite DB file.
+
+    --version                          Prints version info  
+    --usage                            Prints the usage summary of this help
+    --help                             Prints this help message       
+    --man                              Prints the complete manpage
+                                        [not-yet-implemented]
+END_HELP_MSG_END
+
+    printf "%s\n", $help_message_start;
+    print_usage();
+    printf "\n%s", $help_message_end;
+}
+
+sub print_version {
+    printf "%s: %.3f\n", qq{post version:}, qq{$Post::VERSION};
+}
+
+sub print_man {
+    pod2usage(-exitval => 0, -verbose => 2);
+}
+
+sub print_branches {
+    my $branches_ref = shift;
+
+    foreach my $branch (@$branches_ref) {
+        my $geo = $branch->get_geo();
+        printf "%s - %s - %s - %s - %s\n",
+            $branch->get_name(),
+            $branch->get_type() ? $branch->get_type() : q{NaN},
+            $branch->get_address(),
+            $geo->{x},
+            $geo->{y}
+        ;
+    }
+}
+
+sub find_by {
+    my $all_branches_ref = shift;
+    my $arg_ref          = shift;
+    my $func_ref         = shift;
+    my $obj_ref          = shift;
+
+    my $start_count = scalar @$all_branches_ref;
+
+    if (ref $arg_ref eq ref {}) {
+        if (scalar keys %$arg_ref == 0) {
+            return;
+        }
+
+        my $branches = $func_ref->($obj_ref, $arg_ref);
+        if (defined $branches) {
+            push @$all_branches_ref, @$branches;
+        }
+    }
+    if (ref $arg_ref eq ref []) {
+        # nothing to select from
+        if (scalar @$arg_ref == 0) {
+            return;
+        }
+
+        ARG:
+        foreach my $arg (@$arg_ref) {
+            my $branches = $func_ref->($obj_ref, $arg);       
+            next ARG if not defined $branches;
+
+            push @$all_branches_ref, @$branches;
+        }
+    }    
+
+    my $end_count = scalar @$all_branches_ref;
+
+    return ($end_count - $start_count);
+}
+
+sub is_empty {
+    my $arg_ref = shift;
+
+    if (ref $arg_ref eq ref []) {
+        return @$arg_ref;
+    }
+    if (ref $arg_ref eq ref {}) {
+        return keys %$arg_ref;
+    }
+
+    return;
+}
+
+sub more_options_given {
+    my $options_ref = shift;
+
+    my @given_options = grep{ is_empty($_) } values %$options_ref;  
+
+    return scalar @given_options;   
+}
+
+sub frequency {
+    my $branches_ref = shift;
+
+    my %frequency_of = ();
+
+    foreach my $branch (@$branches_ref) {
+        $frequency_of{$branch}{count}++;
+        $frequency_of{$branch}{obj} = $branch;
+    }
+
+    return \%frequency_of;
+}
+
+###############################################################################
+
+# get command line options
+my $result = GetOptions(
+    # meta-options
+    'usage'                    => sub { print_usage();   exit 0; },
+    'help'                     => sub { print_help();    exit 0; },
+    'version'                  => sub { print_version(); exit 0; },
+    'man'                      => sub { print_man();     exit 0; },
+    # behavioral options
+    'n|name:s'               => \ my @names,
+    'nl|namelike:s'          => \ my @names_like,     
+    'a|address:s'            => \ my @addresses,  
+    'al|addresslike:s'       => \ my @addresses_like,  
+    'z|zip:s'                => \ my @zips,
+    'c|city:s'               => \ my @cities,
+    'cl|citylike:s'          => \ my @cities_like,
+    'cp|citypart:s'          => \ my @city_parts,
+    'cpl|citypartlike:s'     => \ my @city_parts_like,
+    't|type:s'               => \ my @type,
+    'g|geo:s{2}'             => \ my %geo, 
+    'ot|openat:s{2}'         => \ my %opening_hour,
+    'ct|closedat:s{2}'       => \ my %close_hour,
+    'od|openduring:s{3}'     => \ my %opening_hours,
+    'cd|closedduring:s{3}'   => \ my %close_hours,
+    'hdb|hasdaybreakon:s{1}' => \ my %day_break,
+    'all'                    => \ my $get_all_branches,
+    'store'                  => \ my $store,
+    'db|dbfile:s'            => \ my $db_file
+);
+
+# number of options given for each switch
+my %option = (
+    names           => \@names,
+    names_like      => \@names_like,
+    addresses       => \@addresses,
+    addresses_like  => \@addresses_like,
+    zips            => \@zips,
+    cities          => \@cities,
+    cities_like     => \@cities_like,
+    city_parts      => \@city_parts,
+    city_parts_like => \@city_parts_like,
+    type            => \@type,
+    geo             => \%geo,
+    openat          => \%opening_hour,
+    closedat        => \%close_hour,
+    openduring      => \%opening_hours,
+    closedduring    => \%close_hours,
+    day_break       => \%day_break
+);
+
+Readonly my %function_for => (
+    names           => sub { $_[0]->find_by_name($_[1])           },
+    names_like      => sub { $_[0]->find_by_name_like($_[1])      },
+    addresses       => sub { $_[0]->find_by_address($_[1])        },
+    addresses_like  => sub { $_[0]->find_by_address_like($_[1])   },
+    zips            => sub { $_[0]->find_by_zip($_[1])            },
+    cities          => sub { $_[0]->find_by_city($_[1])           },
+    cities_like     => sub { $_[0]->find_by_city_like($_[1])      },
+    city_parts      => sub { $_[0]->find_by_city_part($_[1])      },
+    city_parts_like => sub { $_[0]->find_by_city_part_like($_[1]) },
+    type            => sub { $_[0]->find_by_type($_[1])           },
+    geo             => sub { $_[0]->find_by_geo($_[1])            },
+    openat          => sub { $_[0]->find_by_open_at($_[1])        },
+    closedat        => sub { $_[0]->find_by_closed_at($_[1])      },
+    openduring      => sub { $_[0]->find_by_open_during($_[1])    },
+    closedduring    => sub { $_[0]->find_by_closed_during($_[1])  },
+    day_break       => sub { $_[0]->find_by_day_break_on($_[1])   }
+);
+
+###############################################################################
+
+# if wrong options were given
+if (!$result) {
+    print_usage();
+    exit 1;
+}
+
+# get branches, build objects
+my $post = Post->new();
+
+# final branch result set
+my @branches = ();
+my %added_branches_by = ();
+
+# if --all selected, do not apply filters, just return all branches
+if ($get_all_branches) {
+    my $all_branches_ref = $post->get_all();
+    @branches = @$all_branches_ref;
+}
+# filters given, apply them
+else {
+    # search by different attributes
+    while (my ($key, $value) = (each %option)) {  
+        $added_branches_by{$key}
+            = find_by(\@branches, $value, $function_for{$key}, $post);
+    }
+
+    my $number_of_given_options = more_options_given(\%option);
+    # if more options was specified
+    if ($number_of_given_options) {
+        # count frequencies
+        my $frequency_of = frequency \@branches;  
+
+        # get only branches with frequency == number of command-line options
+        # because there's AND between command-line options
+        my @final_result_branches = map{ $frequency_of->{$_}{obj} }
+                                    grep{ $frequency_of->{$_}{count}
+                                        ==  $number_of_given_options}
+                                            keys %$frequency_of
+        ;
+
+        @branches = @final_result_branches;
+    }
+}
+
+# print all
+print_branches(\@branches);
+
+# save all branches into db
+if ($store) {
+    save_branches($post, $db_file || $ENV{POST_DB_FILE});
+}
+
+exit 0;
+
+__END__
+
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+post - query Czech Post branch information from official XML feed
+
+=head1 VERSION
+
+This document describes version 0.011
+
+=head1 SYNOPSIS
+
+    Usage: post [-n <name>] [-nl <namelike>] [-a <address>] [-al <addresslike>]
+                [-z <zip_code>] [-c <city] [-cl <citylike>] [-cp <citypart>]
+                [-cpl <citypartlike>] [-t <type>] [-g <geo>] [-ot <openat>]
+                [-ct <closedat>] [-od <openduring>] [-cd <closedduring>] 
+                [-hdb <day>] [--all] [--store] [-db <db_file>]
+
+    Options:
+        -n|--name <name>                   Name of a branch
+        -nl|--namelike <namelike>          Name of a branch,
+                                            performs =~ when searching
+        -a|--address <address>             Address of a branch
+        -al|--addresslike <addresslike>    Address of a branch,
+                                            performs =~ when searching
+        -z|--zip <zipcode>                 Zip code of a branch
+        -c|--city <city>                   City of a branch
+        -cl|--citylike <citylike>          City of a branch,
+                                            performs =~ when searching 
+        -cp|--citypart <citypart>          City part (district) of a branch
+        -cpl|--citypartlike <citypartlike> City part (distict) of a branch,
+                                            performs =~ when searching 
+        -t|--type <type>                   Type of a branch (posta, depo, "" 
+                                            which equals an unknown type)
+        -g|--geo <geo>                     Geo info of a branch in the following
+                                            format: lat=1044557.63 lon=735997.36
+        -ot|--openat <openat>              Day and Time of a branch,
+                                            in the following format:
+                                           Day=Saturday Time:10:00
+        -ct|--closedat <closedat>          Day and Time of a branch,
+                                            in the following format:
+                                           Day=Saturday Time:10:00
+        -od|--openduring <openduring>      Day and Time of a branch,
+                                            in the following format:
+                                            Day=Saturday StartTime:10:00
+                                            EndTime=18:00
+        -cd|--closedduring <closedduring>  Day and Time of a branch,
+                                            in the following format:
+                                            Day=Saturday StartTime:10:00
+                                            EndTime=20:00
+        -hdb|--hasdaybreakon <day>         Day of a branch in the following format:
+                                            Day=Monday 
+        --all                              Returns all branches.  
+        --store                            Updates local SQLite DB of branches and
+                                            their opening hours 
+        -db|--dbfile <db_file>             Path to a SQLite DB file. 
+
+        --version                          Prints version info  
+        --usage                            Prints the usage summary of this help
+        --help                             Prints this help message       
+        --man                              Prints the complete manpage
+                                            [not-yet-implemented]
+
+=head1 DESCRIPTION
+
+The B<post> application retrieves information from official Czech Post XML feed
+L<http://napostu.ceskaposta.cz/vystupy/balikovny.xml> and presents them in
+loosely structures text output.
+
+Post app provides a bunch of command-line options for searching desired
+branches. They could be combined in any way, but there's always a logical
+AND between different commands (e.g. --name and --type) and a logical
+OR between same commands (e.g. --name and --name).
+So in order to search for all branches in Prague and Brno cities,
+you can issue the following command: $ post --name Praha --name Brno
+If you, however, want to search for only branches in Prague and Brno that
+are of type "posta", you would do that with the following command:
+$ post --name Praha --name Brno --type posta
+
+For more information about the command-line options, run the app with --usage
+or --help options.
+
+=head1 EXAMPLES
+
+To see branches only in Prague that are open on Saturday between 10:00 and
+12:00:
+
+    $ post --city Praha --openduring Day=Saturday StartTime=10:00 EndTime=12:00
+
+To see branches closed on Sunday at 1p.m.:
+
+    $ post -ct Day=Sunday Time=13:00
+
+To see branches closed tomorrow at 1p.m.:
+
+    $ post -ct Day=Tomorrow Time=13:00
+
+You can use one of the following 3 aliases: Yesterday, Today, Tomorow.
+
+To see all depo branches in Ostrava:
+
+    $ post -t depo -c Ostrava
+
+=head1 BUGS AND LIMITATIONS
+
+No bugs have been reported.
+
+Please report any bugs or feature requests to C<pavelsam@centrum.cz>.
+
+=head1 REPOSITORY
+
+L<https://github.com/pavelsaman/PerlApps>
+
+=head1 AUTHOR
+
+Pavel Saman C<pavelsam@centrum.cz>
+
+=head1 LICENCE AND COPYRIGHT
+
+Copyright © 2020, Pavel Saman C<pavelsam@centrum.cz>. All rights reserved.
+
+This module is free software; you can redistribute it and/or
+modify it under the same terms as Perl itself.
+
+=head1 DISCLAIMER OF WARRANTY
+
+BECAUSE THIS SOFTWARE IS LICENSED FREE OF CHARGE, THERE IS NO WARRANTY
+FOR THE SOFTWARE, TO THE EXTENT PERMITTED BY APPLICABLE LAW. EXCEPT WHEN
+OTHERWISE STATED IN WRITING THE COPYRIGHT HOLDERS AND/OR OTHER PARTIES
+PROVIDE THE SOFTWARE "AS IS" WITHOUT WARRANTY OF ANY KIND, EITHER
+EXPRESSED OR IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. THE
+ENTIRE RISK AS TO THE QUALITY AND PERFORMANCE OF THE SOFTWARE IS WITH
+YOU. SHOULD THE SOFTWARE PROVE DEFECTIVE, YOU ASSUME THE COST OF ALL
+NECESSARY SERVICING, REPAIR, OR CORRECTION.
+
+IN NO EVENT UNLESS REQUIRED BY APPLICABLE LAW OR AGREED TO IN WRITING
+WILL ANY COPYRIGHT HOLDER, OR ANY OTHER PARTY WHO MAY MODIFY AND/OR
+REDISTRIBUTE THE SOFTWARE AS PERMITTED BY THE ABOVE LICENCE, BE
+LIABLE TO YOU FOR DAMAGES, INCLUDING ANY GENERAL, SPECIAL, INCIDENTAL,
+OR CONSEQUENTIAL DAMAGES ARISING OUT OF THE USE OR INABILITY TO USE
+THE SOFTWARE (INCLUDING BUT NOT LIMITED TO LOSS OF DATA OR DATA BEING
+RENDERED INACCURATE OR LOSSES SUSTAINED BY YOU OR THIRD PARTIES OR A
+FAILURE OF THE SOFTWARE TO OPERATE WITH ANY OTHER SOFTWARE), EVEN IF
+SUCH HOLDER OR OTHER PARTY HAS BEEN ADVISED OF THE POSSIBILITY OF
+SUCH DAMAGES.
+
+=cut

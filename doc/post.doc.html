@@ -1,0 +1,147 @@
+<?xml version="1.0" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<title>post - query Czech Post branch information from official XML feed</title>
+<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+<link rev="made" href="mailto:" />
+</head>
+
+<body>
+
+
+
+<ul id="index">
+  <li><a href="#NAME">NAME</a></li>
+  <li><a href="#VERSION">VERSION</a></li>
+  <li><a href="#SYNOPSIS">SYNOPSIS</a></li>
+  <li><a href="#DESCRIPTION">DESCRIPTION</a></li>
+  <li><a href="#EXAMPLES">EXAMPLES</a></li>
+  <li><a href="#BUGS-AND-LIMITATIONS">BUGS AND LIMITATIONS</a></li>
+  <li><a href="#REPOSITORY">REPOSITORY</a></li>
+  <li><a href="#AUTHOR">AUTHOR</a></li>
+  <li><a href="#LICENCE-AND-COPYRIGHT">LICENCE AND COPYRIGHT</a></li>
+  <li><a href="#DISCLAIMER-OF-WARRANTY">DISCLAIMER OF WARRANTY</a></li>
+</ul>
+
+<h1 id="NAME">NAME</h1>
+
+<p>post - query Czech Post branch information from official XML feed</p>
+
+<h1 id="VERSION">VERSION</h1>
+
+<p>This document describes version 0.011</p>
+
+<h1 id="SYNOPSIS">SYNOPSIS</h1>
+
+<pre><code>    Usage: post [-n &lt;name&gt;] [-nl &lt;namelike&gt;] [-a &lt;address&gt;] [-al &lt;addresslike&gt;]
+                [-z &lt;zip_code&gt;] [-c &lt;city] [-cl &lt;citylike&gt;] [-cp &lt;citypart&gt;]
+                [-cpl &lt;citypartlike&gt;] [-t &lt;type&gt;] [-g &lt;geo&gt;] [-ot &lt;openat&gt;]
+                [-ct &lt;closedat&gt;] [-od &lt;openduring&gt;] [-cd &lt;closedduring&gt;] 
+                [-hdb &lt;day&gt;] [--all] [--store] [-db &lt;db_file&gt;]
+
+    Options:
+        -n|--name &lt;name&gt;                   Name of a branch
+        -nl|--namelike &lt;namelike&gt;          Name of a branch,
+                                            performs =~ when searching
+        -a|--address &lt;address&gt;             Address of a branch
+        -al|--addresslike &lt;addresslike&gt;    Address of a branch,
+                                            performs =~ when searching
+        -z|--zip &lt;zipcode&gt;                 Zip code of a branch
+        -c|--city &lt;city&gt;                   City of a branch
+        -cl|--citylike &lt;citylike&gt;          City of a branch,
+                                            performs =~ when searching 
+        -cp|--citypart &lt;citypart&gt;          City part (district) of a branch
+        -cpl|--citypartlike &lt;citypartlike&gt; City part (distict) of a branch,
+                                            performs =~ when searching 
+        -t|--type &lt;type&gt;                   Type of a branch (posta, depo, &quot;&quot; 
+                                            which equals an unknown type)
+        -g|--geo &lt;geo&gt;                     Geo info of a branch in the following
+                                            format: lat=1044557.63 lon=735997.36
+        -ot|--openat &lt;openat&gt;              Day and Time of a branch,
+                                            in the following format:
+                                           Day=Saturday Time:10:00
+        -ct|--closedat &lt;closedat&gt;          Day and Time of a branch,
+                                            in the following format:
+                                           Day=Saturday Time:10:00
+        -od|--openduring &lt;openduring&gt;      Day and Time of a branch,
+                                            in the following format:
+                                            Day=Saturday StartTime:10:00
+                                            EndTime=18:00
+        -cd|--closedduring &lt;closedduring&gt;  Day and Time of a branch,
+                                            in the following format:
+                                            Day=Saturday StartTime:10:00
+                                            EndTime=20:00
+        -hdb|--hasdaybreakon &lt;day&gt;         Day of a branch in the following format:
+                                            Day=Monday 
+        --all                              Returns all branches.  
+        --store                            Updates local SQLite DB of branches and
+                                            their opening hours 
+        -db|--dbfile &lt;db_file&gt;             Path to a SQLite DB file. 
+
+        --version                          Prints version info  
+        --usage                            Prints the usage summary of this help
+        --help                             Prints this help message       
+        --man                              Prints the complete manpage
+                                            [not-yet-implemented]</code></pre>
+
+<h1 id="DESCRIPTION">DESCRIPTION</h1>
+
+<p>The <b>post</b> application retrieves information from official Czech Post XML feed <a href="http://napostu.ceskaposta.cz/vystupy/balikovny.xml">http://napostu.ceskaposta.cz/vystupy/balikovny.xml</a> and presents them in loosely structures text output.</p>
+
+<p>Post app provides a bunch of command-line options for searching desired branches. They could be combined in any way, but there&#39;s always a logical AND between different commands (e.g. --name and --type) and a logical OR between same commands (e.g. --name and --name). So in order to search for all branches in Prague and Brno cities, you can issue the following command: $ post --name Praha --name Brno If you, however, want to search for only branches in Prague and Brno that are of type &quot;posta&quot;, you would do that with the following command: $ post --name Praha --name Brno --type posta</p>
+
+<p>For more information about the command-line options, run the app with --usage or --help options.</p>
+
+<h1 id="EXAMPLES">EXAMPLES</h1>
+
+<p>To see branches only in Prague that are open on Saturday between 10:00 and 12:00:</p>
+
+<pre><code>    $ post --city Praha --openduring Day=Saturday StartTime=10:00 EndTime=12:00</code></pre>
+
+<p>To see branches closed on Sunday at 1p.m.:</p>
+
+<pre><code>    $ post -ct Day=Sunday Time=13:00</code></pre>
+
+<p>To see branches closed tomorrow at 1p.m.:</p>
+
+<pre><code>    $ post -ct Day=Tomorrow Time=13:00</code></pre>
+
+<p>You can use one of the following 3 aliases: Yesterday, Today, Tomorow.</p>
+
+<p>To see all depo branches in Ostrava:</p>
+
+<pre><code>    $ post -t depo -c Ostrava</code></pre>
+
+<h1 id="BUGS-AND-LIMITATIONS">BUGS AND LIMITATIONS</h1>
+
+<p>No bugs have been reported.</p>
+
+<p>Please report any bugs or feature requests to <code>pavelsam@centrum.cz</code>.</p>
+
+<h1 id="REPOSITORY">REPOSITORY</h1>
+
+<p><a href="https://github.com/pavelsaman/PerlApps">https://github.com/pavelsaman/PerlApps</a></p>
+
+<h1 id="AUTHOR">AUTHOR</h1>
+
+<p>Pavel Saman <code>pavelsam@centrum.cz</code></p>
+
+<h1 id="LICENCE-AND-COPYRIGHT">LICENCE AND COPYRIGHT</h1>
+
+<p>Copyright &copy; 2020, Pavel Saman <code>pavelsam@centrum.cz</code>. All rights reserved.</p>
+
+<p>This module is free software; you can redistribute it and/or modify it under the same terms as Perl itself.</p>
+
+<h1 id="DISCLAIMER-OF-WARRANTY">DISCLAIMER OF WARRANTY</h1>
+
+<p>BECAUSE THIS SOFTWARE IS LICENSED FREE OF CHARGE, THERE IS NO WARRANTY FOR THE SOFTWARE, TO THE EXTENT PERMITTED BY APPLICABLE LAW. EXCEPT WHEN OTHERWISE STATED IN WRITING THE COPYRIGHT HOLDERS AND/OR OTHER PARTIES PROVIDE THE SOFTWARE &quot;AS IS&quot; WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. THE ENTIRE RISK AS TO THE QUALITY AND PERFORMANCE OF THE SOFTWARE IS WITH YOU. SHOULD THE SOFTWARE PROVE DEFECTIVE, YOU ASSUME THE COST OF ALL NECESSARY SERVICING, REPAIR, OR CORRECTION.</p>
+
+<p>IN NO EVENT UNLESS REQUIRED BY APPLICABLE LAW OR AGREED TO IN WRITING WILL ANY COPYRIGHT HOLDER, OR ANY OTHER PARTY WHO MAY MODIFY AND/OR REDISTRIBUTE THE SOFTWARE AS PERMITTED BY THE ABOVE LICENCE, BE LIABLE TO YOU FOR DAMAGES, INCLUDING ANY GENERAL, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES ARISING OUT OF THE USE OR INABILITY TO USE THE SOFTWARE (INCLUDING BUT NOT LIMITED TO LOSS OF DATA OR DATA BEING RENDERED INACCURATE OR LOSSES SUSTAINED BY YOU OR THIRD PARTIES OR A FAILURE OF THE SOFTWARE TO OPERATE WITH ANY OTHER SOFTWARE), EVEN IF SUCH HOLDER OR OTHER PARTY HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.</p>
+
+
+</body>
+
+</html>
+
+
